@@ -1,7 +1,7 @@
 #include "c_api.h"
 #include "nlp.hpp"
 
-#include <coin/IpIpoptApplication.hpp>
+#include <coin-or/IpIpoptApplication.hpp>
 #include <memory>
 #include <vector>
 #include <iterator>
@@ -125,4 +125,3 @@ CNLP_SolverData cnlp_get_solver_data(CNLP_ProblemPtr problem)
 {
     return problem->get_solution_arguments();
 }
-

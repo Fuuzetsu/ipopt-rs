@@ -295,7 +295,7 @@ fn try_system_install() -> Result<LinkInfo, Error> {
         // how they should be linked without something like pkg-config.
 
         let lib_ipopt = lib.join(major_versioned_library_name());
-        let include_ipopt = include.join("coin").join("IpIpoptApplication.hpp");
+        let include_ipopt = include.join("coin-or").join("IpIpoptApplication.hpp");
 
         if lib_ipopt.exists() && include_ipopt.exists() {
             let link_info = LinkInfo {
@@ -385,12 +385,12 @@ fn download_and_install_prebuilt_binary() -> Result<LinkInfo, Error> {
     }
 
     // Copy headers
-    let install_include_dir = install_dir.join("include").join("coin");
+    let install_include_dir = install_dir.join("include").join("coin-or");
     if !install_include_dir.exists() {
         fs::create_dir_all(&install_include_dir)?;
     }
 
-    let include_dir = unpacked_dir.join("include").join("coin");
+    let include_dir = unpacked_dir.join("include").join("coin-or");
     for entry in fs::read_dir(include_dir)? {
         let file = entry?;
         fs::copy(file.path(), install_include_dir.join(file.file_name())).unwrap();

@@ -3,11 +3,11 @@
 
 #include "c_api.h"
 
-#include <coin/IpUtils.hpp>
-#include <coin/IpTNLP.hpp>
-#include <coin/IpException.hpp>
-#include <coin/IpSmartPtr.hpp>
-#include <coin/IpIpoptApplication.hpp>
+#include <coin-or/IpUtils.hpp>
+#include <coin-or/IpTNLP.hpp>
+#include <coin-or/IpException.hpp>
+#include <coin-or/IpSmartPtr.hpp>
+#include <coin-or/IpIpoptApplication.hpp>
 #include <vector>
 
 /** Declare excpetion that is thrown when invalid NLP data
@@ -135,7 +135,7 @@ public:
                                    Ipopt::IpoptCalculatedQuantities* ip_cq);
     //@}
 private:
-    /** 
+    /**
      * Helper function to build a solver result from a given status by collecting all the relevant
      * solve data into one struct.
      */

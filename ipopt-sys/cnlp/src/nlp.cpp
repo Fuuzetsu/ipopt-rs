@@ -1,6 +1,6 @@
 #include "nlp.hpp"
-#include <coin/IpIpoptApplication.hpp>
-#include <coin/IpBlas.hpp>
+#include <coin-or/IpIpoptApplication.hpp>
+#include <coin-or/IpBlas.hpp>
 
 #include <algorithm>
 
@@ -357,4 +357,3 @@ void CNLP_Problem::finalize_solution(
     m_obj_sol = obj_value;
     // don't need to store the status, we get the status from the OptimizeTNLP method
 }
-
