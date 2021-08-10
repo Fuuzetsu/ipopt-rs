@@ -43,23 +43,20 @@ use tar::Archive;
 
 const LIBRARY: &str = "ipopt";
 const SOURCE_URL: &str = "https://github.com/coin-or/Ipopt/archive/releases/";
-const VERSION: &str = "3.12.13";
-const MIN_VERSION: &str = "3.11.9";
+const VERSION: &str = "3.14.2";
+const MIN_VERSION: &str = "3.14.2";
 const BINARY_DL_URL: &str = "https://github.com/JuliaOpt/IpoptBuilder/releases/download/";
-// hashes For 3.13.0:
-//const SOURCE_MD5: &str = "e6a8d1626b38a816b3ea381b85dfabb6";
-//const SOURCE_SHA1: &str = "73c427ce4cae1081f2b3fd9007fba3180c3c6f9d";
-const SOURCE_MD5: &str = "9c054d4a4ce1b012a8ca168d9cbef6c6";
-const SOURCE_SHA1: &str = "decf7e30acceb7cd80b6cd582ab6ea6c924ac6f9";
+const SOURCE_MD5: &str = "c870eacdfd465bc8e6f4b11056af03c3";
+const SOURCE_SHA1: &str = "b2884097c3bbeef5b8682df49772ae787a823225";
 
-const MUMPS_VERSION: &str = "1.6.2";
+const MUMPS_VERSION: &str = "3.0.0";
 const MUMPS_URL: &str = "https://github.com/coin-or-tools/ThirdParty-Mumps/archive/releases/";
-const MUMPS_MD5: &str = "22cb30f1f79489095d290e6a27832c0e";
-const MUMPS_SHA1: &str = "bd4c8d3f941940c509c76e9420e1523c24b3ae99";
-const METIS_VERSION: &str = "1.3.9";
+const MUMPS_MD5: &str = "2f1193825969f06483c36fb8be60f058";
+const MUMPS_SHA1: &str = "5d226de2df16d76a742bdfbf6333a28f10d250ec";
+const METIS_VERSION: &str = "2.0.0";
 const METIS_URL: &str = "https://github.com/coin-or-tools/ThirdParty-Metis/archive/releases/";
-const METIS_MD5: &str = "1811597f87787dcf996c0ae41f4416c9";
-const METIS_SHA1: &str = "a2cc549be601bc78543e5cf5f21ee1438a66fd24";
+const METIS_MD5: &str = "7582cc4df189ff4f0c8536a41ad2b4db";
+const METIS_SHA1: &str = "3e4c6a221864767029fa7f5af9697d8216b365dd";
 
 #[cfg(target_os = "macos")]
 mod platform {
@@ -183,10 +180,10 @@ fn main() {
         }
     }
 
-    panic!(msg);
+    panic!("{}", msg);
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug)]
 enum Error {
     SystemLibNotFound,
     PkgConfigNotFound,
@@ -194,13 +191,13 @@ enum Error {
     DownloadFailure { response_code: u32, url: String },
     UrlFailure,
     UnsupportedPlatform,
-    IOError,
+    IOError(std::io::Error),
     HashMismatch,
 }
 
 impl From<std::io::Error> for Error {
-    fn from(_: std::io::Error) -> Error {
-        Error::IOError
+    fn from(e: std::io::Error) -> Error {
+        Error::IOError(e)
     }
 }
 
@@ -367,14 +364,20 @@ fn download_and_install_prebuilt_binary() -> Result<LinkInfo, Error> {
     debug!("unpacked_dir = {:?}", &unpacked_dir);
     fs::remove_dir_all(&unpacked_dir).ok();
 
-    extract_tarball(tarball_path, &unpacked_dir);
+    extract_tarball(tarball_path, &unpacked_dir)?;
 
+    debug!("Checking if {} exists...", lib_dir.to_string_lossy());
     // Copy lib
     if !lib_dir.exists() {
+        debug!("Creating {} ...", lib_dir.to_string_lossy());
         fs::create_dir(&lib_dir)?;
     }
 
     let downloaded_lib_path = unpacked_dir.join("lib").join(&library_file);
+    debug!(
+        "downloaded_lib_path = {}",
+        downloaded_lib_path.to_string_lossy()
+    );
 
     // Make links (on unix only)
     if cfg!(unix) {
@@ -387,10 +390,12 @@ fn download_and_install_prebuilt_binary() -> Result<LinkInfo, Error> {
     // Copy headers
     let install_include_dir = install_dir.join("include").join("coin-or");
     if !install_include_dir.exists() {
+        debug!("Creating {}", install_include_dir.to_string_lossy());
         fs::create_dir_all(&install_include_dir)?;
     }
 
     let include_dir = unpacked_dir.join("include").join("coin-or");
+    debug!("Copying out from {}", include_dir.to_string_lossy());
     for entry in fs::read_dir(include_dir)? {
         let file = entry?;
         fs::copy(file.path(), install_include_dir.join(file.file_name())).unwrap();
@@ -536,7 +541,11 @@ fn download_tarball(
     sha1: &str,
 ) -> Result<(), Error> {
     if !tarball_path.exists() {
-        info!("Tarball doesn't exist, downloading...");
+        info!(
+            "Tarball doesn't exist, downloading from {} to {}...",
+            binary_url,
+            tarball_path.to_string_lossy()
+        );
         let f = File::create(tarball_path).unwrap();
         let mut writer = BufWriter::new(f);
         let mut easy = Easy::new();
@@ -610,7 +619,7 @@ fn build_and_install_ipopt() -> Result<LinkInfo, Error> {
     debug!("unpacked_dir = {:?}", &unpacked_dir);
     fs::remove_dir_all(&unpacked_dir).ok();
 
-    extract_tarball(tarball_path, &download_dir);
+    extract_tarball(tarball_path, &download_dir)?;
 
     // Configure and compile
     // We shall compile ipopt in the same mode we build the sys library. This will allow users
@@ -782,6 +791,8 @@ fn build_with_mkl(install_dir: &Path, debug: bool) -> Result<LinkInfo, Error> {
         |cmd| {
             let cmd = cmd
                 .arg(format!("--prefix={}", install_dir.display()))
+                // https://github.com/coin-or-tools/ThirdParty-Mumps/issues/4
+                .arg(format!("ADD_FCFLAGS=-fallow-argument-mismatch"))
                 .args(&BUILD_FLAGS)
                 .arg(blas.clone());
 
@@ -923,7 +934,9 @@ fn download_and_unpack_thirdparty(
     );
     let file_name = format!("{}.tar.gz", version);
 
-    // Download Metis builder
+    // Make sure the directory we're about to start dowloading to actually
+    // exists.
+    std::fs::create_dir_all(third_party)?;
     let tarball_path = third_party.join(&file_name);
     debug!("tarball_path = {:?}", &tarball_path);
 
@@ -938,12 +951,19 @@ fn download_and_unpack_thirdparty(
     // Remove previously extracted files if any
     debug!("unpacked_dir = {:?}", &unpacked_dir);
 
-    extract_tarball(tarball_path, &third_party);
+    let dest_dir = extract_tarball(tarball_path, &third_party)?;
 
     // Move unpacked dir to the expected destination.
-    let dest_dir = format!("ThirdParty-{}-releases-{}", name, version);
+    debug!("Removing {}", unpacked_dir.to_string_lossy());
     fs::remove_dir_all(&unpacked_dir).ok();
-    fs::rename(third_party.join(dest_dir), &unpacked_dir)?;
+
+    let third_party_dest_dir = third_party.join(dest_dir);
+    debug!(
+        "Renaming {} to {}",
+        third_party_dest_dir.to_string_lossy(),
+        unpacked_dir.to_string_lossy()
+    );
+    fs::rename(third_party_dest_dir, &unpacked_dir)?;
 
     Ok(())
 }
@@ -997,9 +1017,6 @@ fn build_with_default_blas(install_dir: &Path, debug: bool) -> Result<LinkInfo, 
         env::current_dir()?.join("get.Mumps").to_str().unwrap(),
         |cmd| cmd,
     );
-
-    link_libs.push((LibKind::Static, "coinmumps".to_string()));
-    link_libs.push((LibKind::Static, "coinmetis".to_string()));
 
     if cfg!(target_os = "linux") {
         if let Ok(mut openblas_lib) = find_linux_lib("openblas", "cblas.h") {
@@ -1055,7 +1072,6 @@ fn build_with_default_blas(install_dir: &Path, debug: bool) -> Result<LinkInfo, 
     run("make", |cmd| cmd.arg(format!("-j{}", num_cpus)));
     //run("make", |cmd| cmd.arg("test")); // Ensure everything is working
     run("make", |cmd| cmd.arg("install")); // Install to install_dir
-
     Ok(LinkInfo {
         libs: link_libs,
         search_paths,
@@ -1070,18 +1086,50 @@ fn remove_suffix(value: &mut String, suffix: &str) {
     }
 }
 
+// Returns the path of top level directory of the tarball. Fails if the directory is not
+// the first entry in the archive.
 fn extract_tarball<P: AsRef<Path> + std::fmt::Debug, P2: AsRef<Path> + std::fmt::Debug>(
     archive_path: P,
     extract_to: P2,
-) {
+) -> std::io::Result<PathBuf> {
     info!(
         "Extracting tarball {:?} to {:?}",
         &archive_path, &extract_to
     );
 
-    let file = File::open(archive_path).unwrap();
-    let mut a = Archive::new(GzDecoder::new(file));
-    a.unpack(extract_to).unwrap();
+    let open_archive = || {
+        let file = File::open(&archive_path).unwrap();
+        Archive::new(GzDecoder::new(file))
+    };
+
+    debug!("Looking for top level directory in {:?}", &archive_path);
+    let dir_path = open_archive()
+        .entries()?
+        .filter_map(|e| {
+            let e = e.ok()?;
+            if e.header().entry_type() == tar::EntryType::Directory {
+                Some(e.path().ok()?.into_owned())
+            } else {
+                None
+            }
+        })
+        .next()
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "no directory entries in tarball")
+        })?;
+    debug!(
+        "Found top level directory to be {} in {:?}",
+        dir_path.to_string_lossy(),
+        &archive_path
+    );
+    // Re-open archive as iterating entries leaves it at some mid-point and we
+    // can't just invoke `unpack` anymore due to it.
+    open_archive().unpack(&extract_to)?;
+    debug!(
+        "Finished extracting {:?} to {:?}",
+        &archive_path, &extract_to
+    );
+    Ok(dir_path)
 }
 
 fn run<F>(name: &str, mut configure: F)
@@ -1090,7 +1138,8 @@ where
 {
     let mut command = Command::new(name);
     let configured = configure(&mut command);
-    info!("Executing {:?}", configured);
+    let cwd = std::env::current_dir().unwrap();
+    info!("Executing {:?} in {}", configured, cwd.to_string_lossy());
     if !configured.status().unwrap().success() {
         panic!("failed to execute {:?}", configured);
     }
